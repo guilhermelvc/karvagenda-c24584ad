@@ -1,0 +1,2 @@
+[functions.chatbot-gemini]
+verify_jwt = false

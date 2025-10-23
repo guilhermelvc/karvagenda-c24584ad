@@ -1,11 +1,50 @@
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Clock, DollarSign, TrendingUp } from 'lucide-react';
+import { Plus, Clock, DollarSign, TrendingUp, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import ServicoModal from '@/components/modals/ServicoModal';
+import DeleteModal from '@/components/modals/DeleteModal';
+import { Servico } from '@/types';
+import { supabase } from '@/lib/supabase';
 
 export default function Servicos() {
-  // Mock data
-  const servicos = [
+  const [servicos, setServicos] = useState<Servico[]>([]);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [selectedServico, setSelectedServico] = useState<Servico | undefined>();
+  const [deleteItem, setDeleteItem] = useState<{ id: string; name: string } | null>(null);
+
+  useEffect(() => {
+    carregarServicos();
+  }, []);
+
+  const carregarServicos = async () => {
+    const { data } = await supabase
+      .from('servicos')
+      .select('*')
+      .order('nome');
+    
+    if (data) setServicos(data);
+  };
+
+  const handleEdit = (servico: Servico) => {
+    setSelectedServico(servico);
+    setModalOpen(true);
+  };
+
+  const handleDelete = (id: string, nome: string) => {
+    setDeleteItem({ id, name: nome });
+    setDeleteModalOpen(true);
+  };
+
+  const handleNewServico = () => {
+    setSelectedServico(undefined);
+    setModalOpen(true);
+  };
+
+  // Mock data para referência
+  const mockServicos = [
     {
       id: 1,
       nome: 'Corte de Cabelo Masculino',
@@ -79,7 +118,7 @@ export default function Servicos() {
             Gerencie os serviços oferecidos
           </p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={handleNewServico}>
           <Plus className="h-4 w-4" />
           Novo Serviço
         </Button>
@@ -102,7 +141,7 @@ export default function Servicos() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {servicos.filter(s => s.popular).length}
+              {servicos.filter(s => s.ativo).length}
             </div>
             <p className="text-xs text-muted-foreground">Mais solicitados</p>
           </CardContent>
@@ -113,7 +152,7 @@ export default function Servicos() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {Math.round(servicos.reduce((acc, s) => acc + s.duracao, 0) / servicos.length)} min
+              {servicos.length > 0 ? Math.round(servicos.reduce((acc, s) => acc + s.duracao_minutos, 0) / servicos.length) : 0} min
             </div>
             <p className="text-xs text-muted-foreground">Por atendimento</p>
           </CardContent>
@@ -146,8 +185,8 @@ export default function Servicos() {
                         <CardTitle className="text-lg">{servico.nome}</CardTitle>
                         <CardDescription>{servico.descricao}</CardDescription>
                       </div>
-                      {servico.popular && (
-                        <Badge className="bg-gradient-primary">Popular</Badge>
+                      {servico.ativo && (
+                        <Badge className="bg-success">Ativo</Badge>
                       )}
                     </div>
                   </CardHeader>
@@ -158,7 +197,7 @@ export default function Servicos() {
                           <Clock className="h-4 w-4" />
                           Duração
                         </span>
-                        <span className="font-medium">{servico.duracao} minutos</span>
+                        <span className="font-medium">{servico.duracao_minutos} minutos</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span className="flex items-center gap-2 text-muted-foreground">
@@ -172,15 +211,22 @@ export default function Servicos() {
                       <div className="flex items-center justify-between text-sm">
                         <span className="flex items-center gap-2 text-muted-foreground">
                           <TrendingUp className="h-4 w-4" />
-                          Agendamentos
+                          Categoria
                         </span>
-                        <span className="font-medium">{servico.totalAgendamentos}</span>
+                        <span className="font-medium">{servico.categoria}</span>
                       </div>
                     </div>
 
                     <div className="pt-2 flex gap-2">
-                      <Button variant="outline" className="flex-1">Editar</Button>
-                      <Button variant="outline" className="flex-1 text-destructive hover:text-destructive">
+                      <Button variant="outline" className="flex-1" onClick={() => handleEdit(servico)}>
+                        Editar
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        className="flex-1 text-destructive hover:text-destructive"
+                        onClick={() => handleDelete(servico.id, servico.nome)}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
                         Excluir
                       </Button>
                     </div>
@@ -190,6 +236,24 @@ export default function Servicos() {
           </div>
         </div>
       ))}
+
+      <ServicoModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        servico={selectedServico}
+        onSuccess={carregarServicos}
+      />
+
+      {deleteItem && (
+        <DeleteModal
+          open={deleteModalOpen}
+          onOpenChange={setDeleteModalOpen}
+          itemId={deleteItem.id}
+          itemName={deleteItem.name}
+          tableName="servicos"
+          onSuccess={carregarServicos}
+        />
+      )}
     </div>
   );
 }

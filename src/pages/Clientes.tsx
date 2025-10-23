@@ -1,16 +1,53 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Search, Mail, Phone, Calendar } from 'lucide-react';
+import { Plus, Search, Mail, Phone, Calendar, Trash2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import ClienteModal from '@/components/modals/ClienteModal';
+import DeleteModal from '@/components/modals/DeleteModal';
+import { Cliente } from '@/types';
+import { supabase } from '@/lib/supabase';
 
 export default function Clientes() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [selectedCliente, setSelectedCliente] = useState<Cliente | undefined>();
+  const [deleteItem, setDeleteItem] = useState<{ id: string; name: string } | null>(null);
 
-  // Mock data
-  const clientes = [
+  useEffect(() => {
+    carregarClientes();
+  }, []);
+
+  const carregarClientes = async () => {
+    const { data } = await supabase
+      .from('clientes')
+      .select('*')
+      .order('nome');
+    
+    if (data) setClientes(data);
+  };
+
+  const handleEdit = (cliente: Cliente) => {
+    setSelectedCliente(cliente);
+    setModalOpen(true);
+  };
+
+  const handleDelete = (id: string, nome: string) => {
+    setDeleteItem({ id, name: nome });
+    setDeleteModalOpen(true);
+  };
+
+  const handleNewCliente = () => {
+    setSelectedCliente(undefined);
+    setModalOpen(true);
+  };
+
+  // Mock data para stats
+  const mockClientes = [
     {
       id: 1,
       nome: 'Maria Silva',
@@ -44,8 +81,8 @@ export default function Clientes() {
   ];
 
   const filteredClientes = clientes.filter(cliente =>
-    cliente.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    cliente.email.toLowerCase().includes(searchTerm.toLowerCase())
+    cliente.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    cliente.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -57,7 +94,7 @@ export default function Clientes() {
             Gerencie sua base de clientes
           </p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={handleNewCliente}>
           <Plus className="h-4 w-4" />
           Novo Cliente
         </Button>
@@ -117,7 +154,7 @@ export default function Clientes() {
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
                   <Avatar className="h-12 w-12">
-                    <AvatarImage src={cliente.avatar} />
+                    <AvatarImage src={cliente.avatar_url} />
                     <AvatarFallback className="bg-gradient-primary text-white">
                       {cliente.nome.split(' ').map(n => n[0]).join('')}
                     </AvatarFallback>
@@ -130,30 +167,52 @@ export default function Clientes() {
                     </CardDescription>
                   </div>
                 </div>
-                {cliente.status === 'vip' && (
-                  <Badge variant="default" className="bg-gradient-primary">VIP</Badge>
-                )}
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Phone className="h-4 w-4" />
-                {cliente.telefone}
+                {cliente.telefone || 'Não informado'}
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Calendar className="h-4 w-4" />
-                Último agendamento: {new Date(cliente.ultimoAgendamento).toLocaleDateString('pt-BR')}
+                <Mail className="h-4 w-4" />
+                {cliente.email}
               </div>
-              <div className="pt-2 flex items-center justify-between">
-                <span className="text-sm font-medium">
-                  {cliente.totalAgendamentos} agendamentos
-                </span>
-                <Button variant="outline" size="sm">Ver Detalhes</Button>
+              <div className="pt-2 flex items-center justify-between gap-2">
+                <Button variant="outline" size="sm" onClick={() => handleEdit(cliente)}>
+                  Editar
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => handleDelete(cliente.id, cliente.nome)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
             </CardContent>
           </Card>
         ))}
       </div>
+
+      <ClienteModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        cliente={selectedCliente}
+        onSuccess={carregarClientes}
+      />
+
+      {deleteItem && (
+        <DeleteModal
+          open={deleteModalOpen}
+          onOpenChange={setDeleteModalOpen}
+          itemId={deleteItem.id}
+          itemName={deleteItem.name}
+          tableName="clientes"
+          onSuccess={carregarClientes}
+        />
+      )}
     </div>
   );
 }

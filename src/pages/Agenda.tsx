@@ -1,12 +1,41 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { format, addDays, startOfWeek, addWeeks, subWeeks } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import AgendamentoModal from '@/components/modals/AgendamentoModal';
+import { Agendamento } from '@/types';
+import { supabase } from '@/lib/supabase';
 
 export default function Agenda() {
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { locale: ptBR }));
+  const [modalOpen, setModalOpen] = useState(false);
+  const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
+  const [selectedAgendamento, setSelectedAgendamento] = useState<Agendamento | undefined>();
+
+  useEffect(() => {
+    carregarAgendamentos();
+  }, []);
+
+  const carregarAgendamentos = async () => {
+    const { data } = await supabase
+      .from('agendamentos')
+      .select(`
+        *,
+        cliente:clientes(*),
+        profissional:profissionais(*),
+        servico:servicos(*)
+      `)
+      .order('data_hora');
+    
+    if (data) setAgendamentos(data);
+  };
+
+  const handleNewAgendamento = () => {
+    setSelectedAgendamento(undefined);
+    setModalOpen(true);
+  };
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i));
   const timeSlots = Array.from({ length: 12 }, (_, i) => `${8 + i}:00`);
@@ -28,7 +57,7 @@ export default function Agenda() {
             Gerencie seus agendamentos
           </p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={handleNewAgendamento}>
           <Plus className="h-4 w-4" />
           Novo Agendamento
         </Button>
@@ -145,6 +174,13 @@ export default function Agenda() {
           </div>
         </CardContent>
       </Card>
+
+      <AgendamentoModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        agendamento={selectedAgendamento}
+        onSuccess={carregarAgendamentos}
+      />
     </div>
   );
 }

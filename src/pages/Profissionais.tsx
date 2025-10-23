@@ -1,12 +1,51 @@
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Clock, Calendar, Star } from 'lucide-react';
+import { Plus, Clock, Calendar, Star, Trash2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import ProfissionalModal from '@/components/modals/ProfissionalModal';
+import DeleteModal from '@/components/modals/DeleteModal';
+import { Profissional } from '@/types';
+import { supabase } from '@/lib/supabase';
 
 export default function Profissionais() {
-  // Mock data
-  const profissionais = [
+  const [profissionais, setProfissionais] = useState<Profissional[]>([]);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [selectedProfissional, setSelectedProfissional] = useState<Profissional | undefined>();
+  const [deleteItem, setDeleteItem] = useState<{ id: string; name: string } | null>(null);
+
+  useEffect(() => {
+    carregarProfissionais();
+  }, []);
+
+  const carregarProfissionais = async () => {
+    const { data } = await supabase
+      .from('profissionais')
+      .select('*')
+      .order('nome');
+    
+    if (data) setProfissionais(data);
+  };
+
+  const handleEdit = (profissional: Profissional) => {
+    setSelectedProfissional(profissional);
+    setModalOpen(true);
+  };
+
+  const handleDelete = (id: string, nome: string) => {
+    setDeleteItem({ id, name: nome });
+    setDeleteModalOpen(true);
+  };
+
+  const handleNewProfissional = () => {
+    setSelectedProfissional(undefined);
+    setModalOpen(true);
+  };
+
+  // Mock data para cards de profissionais se necessário
+  const mockProfissionais = [
     {
       id: 1,
       nome: 'João Silva',
@@ -48,7 +87,7 @@ export default function Profissionais() {
             Gerencie sua equipe de profissionais
           </p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={handleNewProfissional}>
           <Plus className="h-4 w-4" />
           Novo Profissional
         </Button>
@@ -105,7 +144,7 @@ export default function Profissionais() {
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
                   <Avatar className="h-16 w-16">
-                    <AvatarImage src={profissional.avatar} />
+                    <AvatarImage src={profissional.avatar_url} />
                     <AvatarFallback className="bg-gradient-primary text-white text-xl">
                       {profissional.nome.split(' ').map(n => n[0]).join('')}
                     </AvatarFallback>
@@ -115,34 +154,32 @@ export default function Profissionais() {
                     <CardDescription>{profissional.especialidade}</CardDescription>
                   </div>
                 </div>
-                <Badge
-                  variant={profissional.status === 'ativo' ? 'default' : 'secondary'}
-                  className={profissional.status === 'ativo' ? 'bg-success' : ''}
-                >
-                  {profissional.status === 'ativo' ? 'Ativo' : 'Ausente'}
-                </Badge>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm">
                   <Clock className="h-4 w-4 text-muted-foreground" />
-                  <span>{profissional.horarios}</span>
+                  <span>Horários configurados</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <span>{profissional.totalAtendimentos} atendimentos realizados</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <Star className="h-4 w-4 fill-warning text-warning" />
-                  <span className="font-medium">{profissional.avaliacao}</span>
-                  <span className="text-muted-foreground">avaliação</span>
+                  <span>{profissional.especialidade}</span>
                 </div>
               </div>
 
               <div className="pt-2 flex gap-2">
-                <Button variant="outline" className="flex-1">Ver Agenda</Button>
-                <Button variant="outline" className="flex-1">Editar</Button>
+                <Button variant="outline" className="flex-1" onClick={() => handleEdit(profissional)}>
+                  Editar
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => handleDelete(profissional.id, profissional.nome)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -178,6 +215,24 @@ export default function Profissionais() {
           </div>
         </CardContent>
       </Card>
+
+      <ProfissionalModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        profissional={selectedProfissional}
+        onSuccess={carregarProfissionais}
+      />
+
+      {deleteItem && (
+        <DeleteModal
+          open={deleteModalOpen}
+          onOpenChange={setDeleteModalOpen}
+          itemId={deleteItem.id}
+          itemName={deleteItem.name}
+          tableName="profissionais"
+          onSuccess={carregarProfissionais}
+        />
+      )}
     </div>
   );
 }

@@ -8,6 +8,21 @@ export interface Usuario {
   created_at: string;
 }
 
+export interface FichaAnamnese {
+  tipo_pele?: string;
+  alergias?: string;
+  medicamentos_uso?: string;
+  cirurgias_previas?: string;
+  tratamentos_esteticos_anteriores?: string;
+  exposicao_solar?: string;
+  gestante_lactante?: string;
+  doencas_preexistentes?: string;
+  objetivo_tratamento?: string;
+  observacoes_adicionais?: string;
+  assinatura_digital?: string; // Base64 da assinatura
+  data_preenchimento?: string;
+}
+
 export interface Cliente {
   id: string;
   user_id?: string;
@@ -17,6 +32,7 @@ export interface Cliente {
   whatsapp?: string;
   avatar_url?: string;
   observacoes?: string;
+  ficha_anamnese?: FichaAnamnese;
   created_at: string;
   updated_at: string;
 }
