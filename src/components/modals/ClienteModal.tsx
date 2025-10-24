@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,8 @@ import { Cliente, FichaAnamnese } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import SignatureCanvas from 'react-signature-canvas';
-import { useRef } from 'react';
+import jsPDF from 'jspdf';
+import { Download } from 'lucide-react';
 
 interface ClienteModalProps {
   open: boolean;
@@ -92,6 +93,134 @@ export default function ClienteModal({ open, onOpenChange, cliente, onSuccess }:
     }
   };
 
+  const handleExportPDF = async () => {
+    try {
+      // Buscar configurações do negócio
+      const { data: config } = await supabase
+        .from('configuracoes_negocio')
+        .select('*')
+        .single();
+
+      const pdf = new jsPDF();
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      let yPos = 20;
+
+      // Cabeçalho com logo e dados da clínica
+      pdf.setFontSize(18);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(config?.nome_negocio || 'Clínica Estética', pageWidth / 2, yPos, { align: 'center' });
+      
+      yPos += 8;
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+      if (config?.endereco) pdf.text(config.endereco, pageWidth / 2, yPos, { align: 'center' });
+      
+      yPos += 5;
+      if (config?.telefone) pdf.text(`Tel: ${config.telefone} | Email: ${config.email || ''}`, pageWidth / 2, yPos, { align: 'center' });
+      
+      yPos += 10;
+      pdf.setLineWidth(0.5);
+      pdf.line(20, yPos, pageWidth - 20, yPos);
+      
+      // Título
+      yPos += 15;
+      pdf.setFontSize(16);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('FICHA DE ANAMNESE', pageWidth / 2, yPos, { align: 'center' });
+
+      // Dados do cliente
+      yPos += 15;
+      pdf.setFontSize(12);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('DADOS PESSOAIS', 20, yPos);
+      
+      yPos += 8;
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(`Nome: ${formData.nome}`, 20, yPos);
+      
+      yPos += 6;
+      pdf.text(`Email: ${formData.email}`, 20, yPos);
+      
+      yPos += 6;
+      pdf.text(`Telefone: ${formData.telefone || 'Não informado'} | WhatsApp: ${formData.whatsapp || 'Não informado'}`, 20, yPos);
+
+      // Dados da anamnese
+      yPos += 15;
+      pdf.setFontSize(12);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('INFORMAÇÕES DE ANAMNESE', 20, yPos);
+
+      const campos = [
+        { label: 'Tipo de Pele', value: anamnese.tipo_pele },
+        { label: 'Alergias', value: anamnese.alergias },
+        { label: 'Medicamentos em Uso', value: anamnese.medicamentos_uso },
+        { label: 'Cirurgias Prévias', value: anamnese.cirurgias_previas },
+        { label: 'Tratamentos Estéticos Anteriores', value: anamnese.tratamentos_esteticos_anteriores },
+        { label: 'Exposição Solar', value: anamnese.exposicao_solar },
+        { label: 'Gestante ou Lactante', value: anamnese.gestante_lactante },
+        { label: 'Doenças Pré-existentes', value: anamnese.doencas_preexistentes },
+        { label: 'Objetivo do Tratamento', value: anamnese.objetivo_tratamento },
+        { label: 'Observações Adicionais', value: anamnese.observacoes_adicionais },
+      ];
+
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+      
+      campos.forEach((campo) => {
+        yPos += 8;
+        if (yPos > 270) {
+          pdf.addPage();
+          yPos = 20;
+        }
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(`${campo.label}:`, 20, yPos);
+        pdf.setFont('helvetica', 'normal');
+        const texto = campo.value || 'Não informado';
+        const linhasTexto = pdf.splitTextToSize(texto, pageWidth - 40);
+        yPos += 5;
+        pdf.text(linhasTexto, 20, yPos);
+        yPos += (linhasTexto.length - 1) * 5;
+      });
+
+      // Assinatura
+      if (anamnese.assinatura_digital || sigCanvas.current?.toDataURL()) {
+        yPos += 15;
+        if (yPos > 240) {
+          pdf.addPage();
+          yPos = 20;
+        }
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Assinatura Digital:', 20, yPos);
+        yPos += 5;
+        const assinatura = anamnese.assinatura_digital || sigCanvas.current?.toDataURL();
+        if (assinatura) {
+          pdf.addImage(assinatura, 'PNG', 20, yPos, 80, 30);
+        }
+      }
+
+      // Rodapé
+      const dataPreenchimento = anamnese.data_preenchimento 
+        ? new Date(anamnese.data_preenchimento).toLocaleDateString('pt-BR')
+        : new Date().toLocaleDateString('pt-BR');
+      
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'italic');
+      pdf.text(`Data de preenchimento: ${dataPreenchimento}`, pageWidth / 2, 285, { align: 'center' });
+
+      // Salvar PDF
+      pdf.save(`ficha-anamnese-${formData.nome.replace(/\s+/g, '-').toLowerCase()}.pdf`);
+      
+      toast({ title: 'PDF exportado com sucesso!' });
+    } catch (error: any) {
+      toast({
+        title: 'Erro ao exportar PDF',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -167,6 +296,20 @@ export default function ClienteModal({ open, onOpenChange, cliente, onSuccess }:
             </TabsContent>
 
             <TabsContent value="anamnese" className="space-y-4 mt-4">
+              {cliente && (
+                <div className="flex justify-end mb-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportPDF}
+                    className="gap-2"
+                  >
+                    <Download className="h-4 w-4" />
+                    Exportar PDF
+                  </Button>
+                </div>
+              )}
               <div className="grid gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="tipo_pele">Tipo de Pele</Label>

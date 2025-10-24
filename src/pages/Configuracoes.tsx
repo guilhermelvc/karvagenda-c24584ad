@@ -6,9 +6,43 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Settings, Palette, Bot, MessageSquare, Globe } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Settings, Palette, Bot, MessageSquare, Globe, Users } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 
 export default function Configuracoes() {
+  const [clientes, setClientes] = useState<any[]>([]);
+  const [clientesSelecionados, setClientesSelecionados] = useState<string[]>([]);
+  const [listaManual, setListaManual] = useState('');
+
+  useEffect(() => {
+    carregarClientes();
+  }, []);
+
+  const carregarClientes = async () => {
+    const { data } = await supabase
+      .from('clientes')
+      .select('id, nome, whatsapp')
+      .order('nome');
+    
+    if (data) setClientes(data);
+  };
+
+  const toggleCliente = (whatsapp: string) => {
+    setClientesSelecionados(prev => 
+      prev.includes(whatsapp)
+        ? prev.filter(w => w !== whatsapp)
+        : [...prev, whatsapp]
+    );
+  };
+
+  const gerarListaCompleta = () => {
+    const manual = listaManual.split('\n').filter(l => l.trim());
+    const selecionados = clientesSelecionados;
+    return [...new Set([...manual, ...selecionados])].join('\n');
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -190,47 +224,90 @@ export default function Configuracoes() {
                   <Switch defaultChecked />
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="tempo-antes">Lembrete automático</Label>
-                    <select 
-                      id="tempo-antes"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
-                    >
-                      <option value="30min">30 minutos antes</option>
-                      <option value="1h">1 hora antes</option>
-                      <option value="2h">2 horas antes</option>
-                      <option value="4h">4 horas antes</option>
-                      <option value="12h">12 horas antes</option>
-                      <option value="24h" selected>24 horas antes</option>
-                      <option value="48h">48 horas antes</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="horario-envio">Horário de envio</Label>
-                    <Input 
-                      id="horario-envio"
-                      type="time"
-                      defaultValue="09:00"
-                    />
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="tempo-antes">Lembrete automático</Label>
+                  <select 
+                    id="tempo-antes"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+                  >
+                    <option value="30min">30 minutos antes</option>
+                    <option value="1h">1 hora antes</option>
+                    <option value="2h">2 horas antes</option>
+                    <option value="4h">4 horas antes</option>
+                    <option value="12h">12 horas antes</option>
+                    <option value="24h" selected>24 horas antes</option>
+                    <option value="48h">48 horas antes</option>
+                  </select>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="lista-transmissao">Lista de Transmissão</Label>
-                <p className="text-sm text-muted-foreground mb-2">
-                  Adicione números para enviar mensagens em massa (um por linha)
-                </p>
-                <Textarea 
-                  id="lista-transmissao"
-                  placeholder="+55 11 98765-4321&#10;+55 11 91234-5678&#10;+55 11 99999-8888"
-                  rows={6}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Formato: +55 DDD número (com código do país)
-                </p>
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-base">Lista de Transmissão</Label>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Selecione clientes cadastrados ou adicione números manualmente
+                  </p>
+                </div>
+
+                <Tabs defaultValue="clientes" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="clientes" className="gap-2">
+                      <Users className="h-4 w-4" />
+                      Clientes Cadastrados
+                    </TabsTrigger>
+                    <TabsTrigger value="manual">Adicionar Manualmente</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="clientes" className="space-y-2 max-h-[300px] overflow-y-auto">
+                    {clientes.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-8">
+                        Nenhum cliente com WhatsApp cadastrado
+                      </p>
+                    ) : (
+                      clientes.map((cliente) => (
+                        cliente.whatsapp && (
+                          <div key={cliente.id} className="flex items-center space-x-2 p-2 hover:bg-muted rounded-md">
+                            <Checkbox
+                              id={`cliente-${cliente.id}`}
+                              checked={clientesSelecionados.includes(cliente.whatsapp)}
+                              onCheckedChange={() => toggleCliente(cliente.whatsapp)}
+                            />
+                            <Label
+                              htmlFor={`cliente-${cliente.id}`}
+                              className="flex-1 cursor-pointer"
+                            >
+                              <span className="font-medium">{cliente.nome}</span>
+                              <span className="text-sm text-muted-foreground ml-2">
+                                {cliente.whatsapp}
+                              </span>
+                            </Label>
+                          </div>
+                        )
+                      ))
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="manual" className="space-y-2">
+                    <Textarea 
+                      placeholder="+55 11 98765-4321&#10;+55 11 91234-5678&#10;+55 11 99999-8888"
+                      rows={8}
+                      value={listaManual}
+                      onChange={(e) => setListaManual(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Formato: +55 DDD número (um por linha)
+                    </p>
+                  </TabsContent>
+                </Tabs>
+
+                <div className="p-3 bg-muted rounded-md">
+                  <p className="text-sm font-medium mb-1">
+                    Total de números selecionados: {clientesSelecionados.length + listaManual.split('\n').filter(l => l.trim()).length}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {clientesSelecionados.length} clientes + {listaManual.split('\n').filter(l => l.trim()).length} manuais
+                  </p>
+                </div>
               </div>
 
               <Button>Salvar Configurações WhatsApp</Button>

@@ -79,10 +79,34 @@ const supabaseAnonKey = 'SUA_CHAVE_PUBLICA';
 ```
 
 #### 3.3 Execute as migrações do banco de dados
+
+**IMPORTANTE**: Se você já possui tabelas criadas, execute primeiro os comandos DROP para limpar o banco e recriá-lo com as novas funcionalidades.
+
 Execute os seguintes comandos SQL no SQL Editor do Supabase:
 
 ```sql
--- Criar tabela de perfis de usuário
+-- ============================================
+-- LIMPEZA DO BANCO (DROP TABLES)
+-- Execute apenas se já tiver tabelas criadas
+-- ============================================
+
+-- Remover políticas e triggers primeiro
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+DROP FUNCTION IF EXISTS public.handle_new_user();
+
+-- Remover tabelas (ordem importa por causa das foreign keys)
+DROP TABLE IF EXISTS public.agendamentos CASCADE;
+DROP TABLE IF EXISTS public.servicos CASCADE;
+DROP TABLE IF EXISTS public.profissionais CASCADE;
+DROP TABLE IF EXISTS public.clientes CASCADE;
+DROP TABLE IF EXISTS public.configuracoes_negocio CASCADE;
+DROP TABLE IF EXISTS public.perfis CASCADE;
+
+-- ============================================
+-- CRIAÇÃO COMPLETA DO SCHEMA
+-- ============================================
+
+-- 1. Tabela de perfis de usuário
 CREATE TABLE public.perfis (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   nome TEXT,
@@ -93,10 +117,8 @@ CREATE TABLE public.perfis (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Habilitar RLS
 ALTER TABLE public.perfis ENABLE ROW LEVEL SECURITY;
 
--- Políticas de segurança
 CREATE POLICY "Usuários podem ver seu próprio perfil"
   ON public.perfis FOR SELECT
   USING (auth.uid() = id);
@@ -119,7 +141,7 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- Criar tabela de clientes
+-- 2. Tabela de clientes (com ficha de anamnese)
 CREATE TABLE public.clientes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -129,13 +151,60 @@ CREATE TABLE public.clientes (
   whatsapp TEXT,
   avatar_url TEXT,
   observacoes TEXT,
+  ficha_anamnese JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 ALTER TABLE public.clientes ENABLE ROW LEVEL SECURITY;
 
--- Criar tabela de profissionais
+-- Políticas para clientes
+CREATE POLICY "Admins podem ver todos os clientes"
+  ON public.clientes FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.perfis 
+      WHERE id = auth.uid() AND tipo_perfil = 'admin'
+    )
+  );
+
+CREATE POLICY "Profissionais podem ver clientes"
+  ON public.clientes FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.perfis 
+      WHERE id = auth.uid() AND tipo_perfil IN ('admin', 'profissional')
+    )
+  );
+
+CREATE POLICY "Admins podem inserir clientes"
+  ON public.clientes FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.perfis 
+      WHERE id = auth.uid() AND tipo_perfil = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins podem atualizar clientes"
+  ON public.clientes FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.perfis 
+      WHERE id = auth.uid() AND tipo_perfil = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins podem deletar clientes"
+  ON public.clientes FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.perfis 
+      WHERE id = auth.uid() AND tipo_perfil = 'admin'
+    )
+  );
+
+-- 3. Tabela de profissionais (com folgas manuais)
 CREATE TABLE public.profissionais (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -144,15 +213,57 @@ CREATE TABLE public.profissionais (
   telefone TEXT,
   especialidade TEXT,
   avatar_url TEXT,
-  horarios JSONB,
-  dias_folga INTEGER[],
+  horarios JSONB DEFAULT '[]'::jsonb,
+  dias_folga INTEGER[] DEFAULT ARRAY[]::INTEGER[],
+  folgas_manuais JSONB DEFAULT '[]'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 ALTER TABLE public.profissionais ENABLE ROW LEVEL SECURITY;
 
--- Criar tabela de serviços
+-- Políticas para profissionais
+CREATE POLICY "Admins podem ver todos os profissionais"
+  ON public.profissionais FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.perfis 
+      WHERE id = auth.uid() AND tipo_perfil = 'admin'
+    )
+  );
+
+CREATE POLICY "Profissionais podem ver seu próprio perfil"
+  ON public.profissionais FOR SELECT
+  USING (user_id = auth.uid());
+
+CREATE POLICY "Admins podem inserir profissionais"
+  ON public.profissionais FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.perfis 
+      WHERE id = auth.uid() AND tipo_perfil = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins podem atualizar profissionais"
+  ON public.profissionais FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.perfis 
+      WHERE id = auth.uid() AND tipo_perfil = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins podem deletar profissionais"
+  ON public.profissionais FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.perfis 
+      WHERE id = auth.uid() AND tipo_perfil = 'admin'
+    )
+  );
+
+-- 4. Tabela de serviços
 CREATE TABLE public.servicos (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   nome TEXT NOT NULL,
@@ -167,12 +278,53 @@ CREATE TABLE public.servicos (
 
 ALTER TABLE public.servicos ENABLE ROW LEVEL SECURITY;
 
--- Criar tabela de agendamentos
+-- Políticas para serviços
+CREATE POLICY "Todos podem ver serviços ativos"
+  ON public.servicos FOR SELECT
+  USING (ativo = true);
+
+CREATE POLICY "Admins podem ver todos os serviços"
+  ON public.servicos FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.perfis 
+      WHERE id = auth.uid() AND tipo_perfil = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins podem inserir serviços"
+  ON public.servicos FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.perfis 
+      WHERE id = auth.uid() AND tipo_perfil = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins podem atualizar serviços"
+  ON public.servicos FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.perfis 
+      WHERE id = auth.uid() AND tipo_perfil = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins podem deletar serviços"
+  ON public.servicos FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.perfis 
+      WHERE id = auth.uid() AND tipo_perfil = 'admin'
+    )
+  );
+
+-- 5. Tabela de agendamentos
 CREATE TABLE public.agendamentos (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  cliente_id UUID REFERENCES public.clientes(id) ON DELETE CASCADE,
-  profissional_id UUID REFERENCES public.profissionais(id) ON DELETE CASCADE,
-  servico_id UUID REFERENCES public.servicos(id) ON DELETE CASCADE,
+  cliente_id UUID REFERENCES public.clientes(id) ON DELETE CASCADE NOT NULL,
+  profissional_id UUID REFERENCES public.profissionais(id) ON DELETE CASCADE NOT NULL,
+  servico_id UUID REFERENCES public.servicos(id) ON DELETE CASCADE NOT NULL,
   data_hora TIMESTAMP WITH TIME ZONE NOT NULL,
   status TEXT DEFAULT 'agendado' CHECK (status IN ('agendado', 'confirmado', 'concluido', 'cancelado')),
   observacoes TEXT,
@@ -184,14 +336,121 @@ CREATE TABLE public.agendamentos (
 
 ALTER TABLE public.agendamentos ENABLE ROW LEVEL SECURITY;
 
--- Políticas básicas (ajuste conforme necessário)
+-- Políticas para agendamentos
+CREATE POLICY "Admins podem ver todos os agendamentos"
+  ON public.agendamentos FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.perfis 
+      WHERE id = auth.uid() AND tipo_perfil = 'admin'
+    )
+  );
+
 CREATE POLICY "Clientes podem ver seus agendamentos"
   ON public.agendamentos FOR SELECT
-  USING (cliente_id IN (SELECT id FROM public.clientes WHERE user_id = auth.uid()));
+  USING (
+    cliente_id IN (
+      SELECT id FROM public.clientes WHERE user_id = auth.uid()
+    )
+  );
 
 CREATE POLICY "Profissionais podem ver seus agendamentos"
   ON public.agendamentos FOR SELECT
-  USING (profissional_id IN (SELECT id FROM public.profissionais WHERE user_id = auth.uid()));
+  USING (
+    profissional_id IN (
+      SELECT id FROM public.profissionais WHERE user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Admins podem inserir agendamentos"
+  ON public.agendamentos FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.perfis 
+      WHERE id = auth.uid() AND tipo_perfil = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins podem atualizar agendamentos"
+  ON public.agendamentos FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.perfis 
+      WHERE id = auth.uid() AND tipo_perfil = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins podem deletar agendamentos"
+  ON public.agendamentos FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.perfis 
+      WHERE id = auth.uid() AND tipo_perfil = 'admin'
+    )
+  );
+
+-- 6. Tabela de configurações do negócio
+CREATE TABLE public.configuracoes_negocio (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nome_negocio TEXT NOT NULL,
+  descricao TEXT,
+  logo_url TEXT,
+  cor_primaria TEXT DEFAULT '#3B82F6',
+  slogan TEXT,
+  telefone TEXT,
+  email TEXT,
+  endereco TEXT,
+  horarios_funcionamento JSONB DEFAULT '[]'::jsonb,
+  whatsapp_api_key TEXT,
+  whatsapp_numero TEXT,
+  whatsapp_lista_transmissao TEXT[],
+  whatsapp_confirmacao_ativa BOOLEAN DEFAULT false,
+  whatsapp_lembrete_tempo TEXT DEFAULT '24h',
+  gemini_api_key TEXT,
+  gemini_prompt TEXT,
+  gemini_ativo BOOLEAN DEFAULT false,
+  idioma TEXT DEFAULT 'pt-BR',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE public.configuracoes_negocio ENABLE ROW LEVEL SECURITY;
+
+-- Políticas para configurações
+CREATE POLICY "Admins podem ver configurações"
+  ON public.configuracoes_negocio FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.perfis 
+      WHERE id = auth.uid() AND tipo_perfil = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins podem atualizar configurações"
+  ON public.configuracoes_negocio FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.perfis 
+      WHERE id = auth.uid() AND tipo_perfil = 'admin'
+    )
+  );
+
+-- Inserir configuração padrão
+INSERT INTO public.configuracoes_negocio (nome_negocio, descricao)
+VALUES ('Meu Negócio', 'Sistema de Agendamento');
+
+-- ============================================
+-- ÍNDICES PARA PERFORMANCE
+-- ============================================
+
+CREATE INDEX idx_clientes_email ON public.clientes(email);
+CREATE INDEX idx_clientes_user_id ON public.clientes(user_id);
+CREATE INDEX idx_profissionais_email ON public.profissionais(email);
+CREATE INDEX idx_profissionais_user_id ON public.profissionais(user_id);
+CREATE INDEX idx_agendamentos_data_hora ON public.agendamentos(data_hora);
+CREATE INDEX idx_agendamentos_cliente_id ON public.agendamentos(cliente_id);
+CREATE INDEX idx_agendamentos_profissional_id ON public.agendamentos(profissional_id);
+CREATE INDEX idx_agendamentos_status ON public.agendamentos(status);
 ```
 
 ### 4. Configure Google OAuth
