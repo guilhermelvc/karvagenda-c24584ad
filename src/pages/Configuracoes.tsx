@@ -179,17 +179,61 @@ export default function Configuracoes() {
                 />
               </div>
 
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Enviar lembretes automáticos</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Enviar mensagem 24h antes do agendamento
-                  </p>
+              <div className="space-y-4 p-4 border border-border rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Enviar confirmação de agendamento</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Enviar mensagem automática ao confirmar
+                    </p>
+                  </div>
+                  <Switch defaultChecked />
                 </div>
-                <Switch defaultChecked />
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="tempo-antes">Lembrete automático</Label>
+                    <select 
+                      id="tempo-antes"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+                    >
+                      <option value="30min">30 minutos antes</option>
+                      <option value="1h">1 hora antes</option>
+                      <option value="2h">2 horas antes</option>
+                      <option value="4h">4 horas antes</option>
+                      <option value="12h">12 horas antes</option>
+                      <option value="24h" selected>24 horas antes</option>
+                      <option value="48h">48 horas antes</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="horario-envio">Horário de envio</Label>
+                    <Input 
+                      id="horario-envio"
+                      type="time"
+                      defaultValue="09:00"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <Button>Conectar WhatsApp</Button>
+              <div className="space-y-2">
+                <Label htmlFor="lista-transmissao">Lista de Transmissão</Label>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Adicione números para enviar mensagens em massa (um por linha)
+                </p>
+                <Textarea 
+                  id="lista-transmissao"
+                  placeholder="+55 11 98765-4321&#10;+55 11 91234-5678&#10;+55 11 99999-8888"
+                  rows={6}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Formato: +55 DDD número (com código do país)
+                </p>
+              </div>
+
+              <Button>Salvar Configurações WhatsApp</Button>
             </CardContent>
           </Card>
         </TabsContent>

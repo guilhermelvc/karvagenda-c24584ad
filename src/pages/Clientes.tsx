@@ -153,14 +153,19 @@ export default function Clientes() {
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <Avatar className="h-12 w-12">
+                  <Avatar className="h-12 w-12 cursor-pointer" onClick={() => handleEdit(cliente)}>
                     <AvatarImage src={cliente.avatar_url} />
                     <AvatarFallback className="bg-gradient-primary text-white">
                       {cliente.nome.split(' ').map(n => n[0]).join('')}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <CardTitle className="text-lg">{cliente.nome}</CardTitle>
+                    <CardTitle 
+                      className="text-lg cursor-pointer hover:text-primary transition-colors"
+                      onClick={() => handleEdit(cliente)}
+                    >
+                      {cliente.nome}
+                    </CardTitle>
                     <CardDescription className="flex items-center gap-1 mt-1">
                       <Mail className="h-3 w-3" />
                       {cliente.email}

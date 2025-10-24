@@ -37,6 +37,23 @@ export interface Cliente {
   updated_at: string;
 }
 
+
+export interface HorarioTrabalho {
+  dia_semana: number; // 0-6 (Domingo-Sábado)
+  inicio: string; // HH:mm
+  fim: string; // HH:mm
+  intervalo_inicio?: string;
+  intervalo_fim?: string;
+}
+
+export interface DiaFolgaManual {
+  data: string; // YYYY-MM-DD
+  descricao: string;
+  dia_todo: boolean;
+  horario_inicio?: string;
+  horario_fim?: string;
+}
+
 export interface Profissional {
   id: string;
   user_id?: string;
@@ -47,16 +64,9 @@ export interface Profissional {
   avatar_url?: string;
   horarios?: HorarioTrabalho[];
   dias_folga?: number[];
+  folgas_manuais?: DiaFolgaManual[];
   created_at: string;
   updated_at: string;
-}
-
-export interface HorarioTrabalho {
-  dia_semana: number; // 0-6 (Domingo-Sábado)
-  inicio: string; // HH:mm
-  fim: string; // HH:mm
-  intervalo_inicio?: string;
-  intervalo_fim?: string;
 }
 
 export interface Servico {

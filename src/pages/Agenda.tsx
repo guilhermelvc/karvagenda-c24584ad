@@ -2,17 +2,29 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
-import { format, addDays, startOfWeek, addWeeks, subWeeks } from 'date-fns';
+import { format, addDays, startOfWeek, addWeeks, subWeeks, startOfMonth, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import AgendamentoModal from '@/components/modals/AgendamentoModal';
 import { Agendamento } from '@/types';
 import { supabase } from '@/lib/supabase';
 
 export default function Agenda() {
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { locale: ptBR }));
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [modalOpen, setModalOpen] = useState(false);
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [selectedAgendamento, setSelectedAgendamento] = useState<Agendamento | undefined>();
+
+  const coresServicos: { [key: string]: string } = {
+    'Corte de Cabelo': '#3B82F6',
+    'Barba': '#10B981',
+    'Manicure': '#F59E0B',
+    'Massagem': '#8B5CF6',
+    'Design Sobrancelha': '#EF4444',
+    default: '#6B7280'
+  };
 
   useEffect(() => {
     carregarAgendamentos();
@@ -40,12 +52,20 @@ export default function Agenda() {
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i));
   const timeSlots = Array.from({ length: 12 }, (_, i) => `${8 + i}:00`);
 
+  const handleMonthSelect = (date: Date | undefined) => {
+    if (date) {
+      setSelectedDate(date);
+      setCurrentWeekStart(startOfWeek(date, { locale: ptBR }));
+    }
+  };
+
   // Mock appointments
   const appointments = [
-    { dia: 1, hora: 2, cliente: 'Maria Silva', servico: 'Corte' },
+    { dia: 1, hora: 2, cliente: 'Maria Silva', servico: 'Corte de Cabelo' },
     { dia: 1, hora: 4, cliente: 'Pedro Santos', servico: 'Barba' },
     { dia: 2, hora: 3, cliente: 'Ana Costa', servico: 'Manicure' },
     { dia: 3, hora: 5, cliente: 'Lucas Oliveira', servico: 'Massagem' },
+    { dia: 4, hora: 2, cliente: 'Carla Lima', servico: 'Design Sobrancelha' },
   ];
 
   return (
@@ -65,11 +85,25 @@ export default function Agenda() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <CalendarIcon className="h-5 w-5" />
-              {format(currentWeekStart, 'MMMM yyyy', { locale: ptBR })}
-            </CardTitle>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="flex items-center gap-2">
+                  <CalendarIcon className="h-5 w-5" />
+                  {format(currentWeekStart, 'MMMM yyyy', { locale: ptBR })}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={handleMonthSelect}
+                  locale={ptBR}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+            
             <div className="flex gap-2">
               <Button
                 variant="outline"
@@ -95,7 +129,7 @@ export default function Agenda() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-8 gap-2">
+          <div className="hidden md:grid md:grid-cols-8 gap-2">
             {/* Header - Time Column */}
             <div className="font-medium text-sm text-muted-foreground">Horário</div>
             
@@ -141,7 +175,10 @@ export default function Agenda() {
                       className="min-h-[60px] border border-border rounded-lg p-1 hover:bg-muted transition-colors cursor-pointer relative"
                     >
                       {appointment && (
-                        <div className="absolute inset-1 bg-gradient-primary rounded p-2 text-white text-xs">
+                        <div 
+                          className="absolute inset-1 rounded p-2 text-white text-xs"
+                          style={{ backgroundColor: coresServicos[appointment.servico] || coresServicos.default }}
+                        >
                           <div className="font-semibold truncate">{appointment.cliente}</div>
                           <div className="opacity-90 truncate">{appointment.servico}</div>
                         </div>
@@ -152,24 +189,63 @@ export default function Agenda() {
               </>
             ))}
           </div>
+
+          {/* Mobile View */}
+          <div className="md:hidden space-y-4">
+            {weekDays.map((day, dayIndex) => (
+              <Card key={day.toISOString()} className="overflow-hidden">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm flex items-center justify-between">
+                    <span>{format(day, 'EEEE', { locale: ptBR })}</span>
+                    <span className={`text-lg ${
+                      format(day, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')
+                        ? 'text-primary font-bold'
+                        : ''
+                    }`}>
+                      {format(day, 'd')}
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {timeSlots.map((time, timeIndex) => {
+                    const appointment = appointments.find(
+                      apt => apt.dia === dayIndex && apt.hora === timeIndex
+                    );
+                    
+                    return appointment ? (
+                      <div 
+                        key={time}
+                        className="p-3 rounded-lg text-white"
+                        style={{ backgroundColor: coresServicos[appointment.servico] || coresServicos.default }}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-semibold">{time}</span>
+                        </div>
+                        <div className="font-medium">{appointment.cliente}</div>
+                        <div className="text-sm opacity-90">{appointment.servico}</div>
+                      </div>
+                    ) : null;
+                  })}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </CardContent>
       </Card>
 
       {/* Legend */}
       <Card>
         <CardContent className="pt-6">
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-gradient-primary" />
-              <span className="text-sm">Agendado</span>
-            </div>
+          <div className="flex flex-wrap items-center gap-4">
+            {Object.entries(coresServicos).filter(([key]) => key !== 'default').map(([servico, cor]) => (
+              <div key={servico} className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: cor }} />
+                <span className="text-sm">{servico}</span>
+              </div>
+            ))}
             <div className="flex items-center gap-2">
               <div className="w-4 h-4 rounded border-2 border-border" />
               <span className="text-sm">Disponível</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-muted" />
-              <span className="text-sm">Indisponível</span>
             </div>
           </div>
         </CardContent>

@@ -94,7 +94,7 @@ export default function Profissionais() {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium">Total de Profissionais</CardTitle>
@@ -115,18 +115,6 @@ export default function Profissionais() {
         </Card>
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Avaliação Média</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold flex items-center gap-1">
-              4.8
-              <Star className="h-5 w-5 fill-warning text-warning" />
-            </div>
-            <p className="text-xs text-muted-foreground">Excelente</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium">Atendimentos Hoje</CardTitle>
           </CardHeader>
           <CardContent>
@@ -143,14 +131,19 @@ export default function Profissionais() {
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
-                  <Avatar className="h-16 w-16">
+                  <Avatar className="h-16 w-16 cursor-pointer" onClick={() => handleEdit(profissional)}>
                     <AvatarImage src={profissional.avatar_url} />
                     <AvatarFallback className="bg-gradient-primary text-white text-xl">
                       {profissional.nome.split(' ').map(n => n[0]).join('')}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <CardTitle>{profissional.nome}</CardTitle>
+                    <CardTitle 
+                      className="cursor-pointer hover:text-primary transition-colors"
+                      onClick={() => handleEdit(profissional)}
+                    >
+                      {profissional.nome}
+                    </CardTitle>
                     <CardDescription>{profissional.especialidade}</CardDescription>
                   </div>
                 </div>
@@ -185,36 +178,6 @@ export default function Profissionais() {
           </Card>
         ))}
       </div>
-
-      {/* Schedule Template */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Horários Disponíveis</CardTitle>
-          <CardDescription>
-            Configure os horários de trabalho dos profissionais
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-7 gap-4">
-            {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((dia) => (
-              <div key={dia} className="text-center">
-                <div className="font-medium mb-2">{dia}</div>
-                <div className="space-y-2">
-                  <div className="text-xs bg-success/10 text-success p-2 rounded">
-                    09:00 - 12:00
-                  </div>
-                  <div className="text-xs bg-muted p-2 rounded text-muted-foreground">
-                    Almoço
-                  </div>
-                  <div className="text-xs bg-success/10 text-success p-2 rounded">
-                    14:00 - 18:00
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
 
       <ProfissionalModal
         open={modalOpen}

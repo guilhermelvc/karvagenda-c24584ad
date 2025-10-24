@@ -8,6 +8,7 @@ import {
   Users,
   UserCircle,
   Briefcase,
+  Megaphone,
   Settings,
   LogOut,
   Moon,
@@ -24,6 +25,7 @@ const menuItems = [
   { icon: Users, label: 'Clientes', path: '/clientes' },
   { icon: UserCircle, label: 'Profissionais', path: '/profissionais' },
   { icon: Briefcase, label: 'Serviços', path: '/servicos' },
+  { icon: Megaphone, label: 'Marketing', path: '/marketing' },
   { icon: Settings, label: 'Configurações', path: '/configuracoes' },
 ];
 

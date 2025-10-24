@@ -3,10 +3,14 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Profissional, HorarioTrabalho } from '@/types';
+import { Profissional, HorarioTrabalho, DiaFolgaManual } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Plus, Trash2 } from 'lucide-react';
+import FolgaManualModal from './FolgaManualModal';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface ProfissionalModalProps {
   open: boolean;
@@ -20,6 +24,7 @@ const diasSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta',
 export default function ProfissionalModal({ open, onOpenChange, profissional, onSuccess }: ProfissionalModalProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [folgaModalOpen, setFolgaModalOpen] = useState(false);
   
   const [formData, setFormData] = useState({
     nome: profissional?.nome || '',
@@ -39,6 +44,7 @@ export default function ProfissionalModal({ open, onOpenChange, profissional, on
   );
 
   const [diasFolga, setDiasFolga] = useState<number[]>(profissional?.dias_folga || [0]);
+  const [folgasManuais, setFolgasManuais] = useState<DiaFolgaManual[]>(profissional?.folgas_manuais || []);
 
   const handleDiaFolgaChange = (dia: number, checked: boolean) => {
     if (checked) {
@@ -54,6 +60,14 @@ export default function ProfissionalModal({ open, onOpenChange, profissional, on
     setHorarios(newHorarios);
   };
 
+  const handleAddFolgaManual = (folga: DiaFolgaManual) => {
+    setFolgasManuais([...folgasManuais, folga]);
+  };
+
+  const handleRemoveFolgaManual = (index: number) => {
+    setFolgasManuais(folgasManuais.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -63,6 +77,7 @@ export default function ProfissionalModal({ open, onOpenChange, profissional, on
         ...formData,
         horarios,
         dias_folga: diasFolga,
+        folgas_manuais: folgasManuais,
         updated_at: new Date().toISOString(),
       };
 
@@ -171,6 +186,46 @@ export default function ProfissionalModal({ open, onOpenChange, profissional, on
           </div>
 
           <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <Label className="text-base font-semibold">Folgas e Feriados Manuais</Label>
+              <Button type="button" variant="outline" size="sm" onClick={() => setFolgaModalOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Adicionar
+              </Button>
+            </div>
+            {folgasManuais.length > 0 ? (
+              <div className="space-y-2">
+                {folgasManuais.map((folga, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 border border-border rounded-lg">
+                    <div className="flex-1">
+                      <div className="font-medium">{folga.descricao}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {format(new Date(folga.data), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                        {!folga.dia_todo && folga.horario_inicio && folga.horario_fim && 
+                          ` • ${folga.horario_inicio} às ${folga.horario_fim}`
+                        }
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRemoveFolgaManual(index)}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                Nenhuma folga manual cadastrada
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-4">
             <Label className="text-base font-semibold">Horários de Trabalho</Label>
             <div className="space-y-3">
               {horarios.map((horario, index) => (
@@ -235,6 +290,12 @@ export default function ProfissionalModal({ open, onOpenChange, profissional, on
           </DialogFooter>
         </form>
       </DialogContent>
+
+      <FolgaManualModal
+        open={folgaModalOpen}
+        onOpenChange={setFolgaModalOpen}
+        onAdd={handleAddFolgaManual}
+      />
     </Dialog>
   );
 }

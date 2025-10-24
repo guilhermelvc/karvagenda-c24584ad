@@ -118,12 +118,14 @@ export default function ServicoModal({ open, onOpenChange, servico, onSuccess }:
                 <Input
                   id="duracao_minutos"
                   type="number"
-                  min="15"
-                  step="15"
+                  min="1"
+                  step="1"
                   value={formData.duracao_minutos}
                   onChange={(e) => setFormData({ ...formData, duracao_minutos: parseInt(e.target.value) })}
+                  placeholder="Ex: 30, 45, 60, 90..."
                   required
                 />
+                <p className="text-xs text-muted-foreground">Digite qualquer valor em minutos</p>
               </div>
 
               <div className="grid gap-2">
