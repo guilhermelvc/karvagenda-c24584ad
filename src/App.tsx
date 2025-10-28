@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AppLayout } from "./components/Layout/AppLayout";
+import GoogleAnalytics from "./components/GoogleAnalytics";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Agenda from "./pages/Agenda";
@@ -40,6 +41,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <BrowserRouter>
+      <GoogleAnalytics />
       <ThemeProvider>
         <AuthProvider>
           <TooltipProvider>
