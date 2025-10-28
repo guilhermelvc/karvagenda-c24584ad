@@ -1,2 +1,14 @@
 [functions.chatbot-gemini]
 verify_jwt = false
+
+[functions.whatsapp-chatbot]
+verify_jwt = false
+
+[functions.evolution-api]
+verify_jwt = false
+
+[functions.google-calendar]
+verify_jwt = false
+
+[functions.canva-integration]
+verify_jwt = false
