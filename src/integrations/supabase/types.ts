@@ -138,11 +138,17 @@ export type Database = {
           slogan: string | null
           telefone: string | null
           updated_at: string | null
+          whatsapp_access_token: string | null
           whatsapp_api_key: string | null
+          whatsapp_business_account_id: string | null
           whatsapp_confirmacao_ativa: boolean | null
           whatsapp_lembrete_tempo: string | null
           whatsapp_lista_transmissao: string[] | null
           whatsapp_numero: string | null
+          whatsapp_phone_number_id: string | null
+          whatsapp_resgate_ativa: boolean | null
+          whatsapp_resgate_dias: number | null
+          whatsapp_resgate_mensagem: string | null
         }
         Insert: {
           cor_primaria?: string | null
@@ -161,11 +167,17 @@ export type Database = {
           slogan?: string | null
           telefone?: string | null
           updated_at?: string | null
+          whatsapp_access_token?: string | null
           whatsapp_api_key?: string | null
+          whatsapp_business_account_id?: string | null
           whatsapp_confirmacao_ativa?: boolean | null
           whatsapp_lembrete_tempo?: string | null
           whatsapp_lista_transmissao?: string[] | null
           whatsapp_numero?: string | null
+          whatsapp_phone_number_id?: string | null
+          whatsapp_resgate_ativa?: boolean | null
+          whatsapp_resgate_dias?: number | null
+          whatsapp_resgate_mensagem?: string | null
         }
         Update: {
           cor_primaria?: string | null
@@ -184,11 +196,17 @@ export type Database = {
           slogan?: string | null
           telefone?: string | null
           updated_at?: string | null
+          whatsapp_access_token?: string | null
           whatsapp_api_key?: string | null
+          whatsapp_business_account_id?: string | null
           whatsapp_confirmacao_ativa?: boolean | null
           whatsapp_lembrete_tempo?: string | null
           whatsapp_lista_transmissao?: string[] | null
           whatsapp_numero?: string | null
+          whatsapp_phone_number_id?: string | null
+          whatsapp_resgate_ativa?: boolean | null
+          whatsapp_resgate_dias?: number | null
+          whatsapp_resgate_mensagem?: string | null
         }
         Relationships: []
       }
@@ -199,7 +217,6 @@ export type Database = {
           id: string
           nome: string | null
           telefone: string | null
-          tipo_perfil: string | null
           updated_at: string | null
         }
         Insert: {
@@ -208,7 +225,6 @@ export type Database = {
           id: string
           nome?: string | null
           telefone?: string | null
-          tipo_perfil?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -217,7 +233,6 @@ export type Database = {
           id?: string
           nome?: string | null
           telefone?: string | null
-          tipo_perfil?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -303,15 +318,42 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          created_at: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "profissional" | "cliente"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -438,6 +480,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "profissional", "cliente"],
+    },
   },
 } as const
