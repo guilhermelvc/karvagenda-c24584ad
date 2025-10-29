@@ -43,6 +43,21 @@ export default function AgendamentoModal({ open, onOpenChange, agendamento, onSu
   }, [open]);
 
   useEffect(() => {
+    if (open && !agendamento) {
+      // Limpar formulário ao abrir para novo agendamento
+      setFormData({
+        cliente_id: '',
+        profissional_id: '',
+        servico_id: '',
+        data: new Date(),
+        horario: '',
+        status: 'agendado',
+        observacoes: '',
+      });
+    }
+  }, [open, agendamento]);
+
+  useEffect(() => {
     if (formData.profissional_id && formData.data) {
       carregarHorariosDisponiveis();
     }
@@ -69,15 +84,106 @@ export default function AgendamentoModal({ open, onOpenChange, agendamento, onSu
   };
 
   const carregarHorariosDisponiveis = async () => {
-    // Gera horários de 9h às 18h em intervalos de 30 minutos
-    const horarios: string[] = [];
-    for (let h = 9; h <= 18; h++) {
-      horarios.push(`${h.toString().padStart(2, '0')}:00`);
-      if (h < 18) {
-        horarios.push(`${h.toString().padStart(2, '0')}:30`);
+    try {
+      // Buscar profissional selecionado
+      const { data: profissional } = await supabase
+        .from('profissionais')
+        .select('horarios, folgas_manuais, dias_folga')
+        .eq('id', formData.profissional_id)
+        .single();
+
+      const diaSemana = formData.data.getDay();
+      const dataStr = format(formData.data, 'yyyy-MM-dd');
+
+      // Verificar se é dia de folga
+      if (profissional?.dias_folga?.includes(diaSemana)) {
+        setHorariosDisponiveis([]);
+        return;
       }
+
+      // Verificar folgas manuais
+      const folgaManual = profissional?.folgas_manuais?.find((f: any) => f.data === dataStr);
+      if (folgaManual?.dia_todo) {
+        setHorariosDisponiveis([]);
+        return;
+      }
+
+      // Buscar horários de trabalho do profissional para o dia
+      const horarioTrabalho = profissional?.horarios?.find((h: any) => h.dia_semana === diaSemana);
+      
+      if (!horarioTrabalho) {
+        setHorariosDisponiveis([]);
+        return;
+      }
+
+      // Gerar horários disponíveis baseado no horário de trabalho
+      const horarios: string[] = [];
+      const [horaInicio, minInicio] = horarioTrabalho.inicio.split(':').map(Number);
+      const [horaFim, minFim] = horarioTrabalho.fim.split(':').map(Number);
+      
+      let horaAtual = horaInicio;
+      let minAtual = minInicio;
+      
+      while (horaAtual < horaFim || (horaAtual === horaFim && minAtual < minFim)) {
+        const horarioStr = `${horaAtual.toString().padStart(2, '0')}:${minAtual.toString().padStart(2, '0')}`;
+        
+        // Verificar se não está no intervalo de almoço
+        const intervaloInicio = horarioTrabalho.intervalo_inicio;
+        const intervaloFim = horarioTrabalho.intervalo_fim;
+        
+        if (intervaloInicio && intervaloFim) {
+          if (horarioStr < intervaloInicio || horarioStr >= intervaloFim) {
+            horarios.push(horarioStr);
+          }
+        } else {
+          horarios.push(horarioStr);
+        }
+        
+        // Incrementar 30 minutos
+        minAtual += 30;
+        if (minAtual >= 60) {
+          minAtual = 0;
+          horaAtual += 1;
+        }
+      }
+
+      // Buscar agendamentos existentes para o dia
+      const inicioData = new Date(formData.data);
+      inicioData.setHours(0, 0, 0, 0);
+      const fimData = new Date(formData.data);
+      fimData.setHours(23, 59, 59, 999);
+
+      const { data: agendamentosExistentes } = await supabase
+        .from('agendamentos')
+        .select('data_hora, servico:servicos(duracao_minutos)')
+        .eq('profissional_id', formData.profissional_id)
+        .gte('data_hora', inicioData.toISOString())
+        .lte('data_hora', fimData.toISOString())
+        .neq('status', 'cancelado');
+
+      // Filtrar horários ocupados
+      const horariosDisponiveis = horarios.filter(horario => {
+        const [hora, min] = horario.split(':').map(Number);
+        const horarioDate = new Date(formData.data);
+        horarioDate.setHours(hora, min, 0, 0);
+
+        // Verificar se horário está ocupado
+        const ocupado = agendamentosExistentes?.some((ag: any) => {
+          const agendamentoDate = new Date(ag.data_hora);
+          const duracaoMin = ag.servico?.duracao_minutos || 60;
+          const agendamentoFim = new Date(agendamentoDate.getTime() + duracaoMin * 60000);
+          
+          return horarioDate >= agendamentoDate && horarioDate < agendamentoFim;
+        });
+
+        return !ocupado;
+      });
+
+      setHorariosDisponiveis(horariosDisponiveis);
+    } catch (error) {
+      console.error('Erro ao carregar horários:', error);
+      setHorariosDisponiveis([]);
     }
-    setHorariosDisponiveis(horarios);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

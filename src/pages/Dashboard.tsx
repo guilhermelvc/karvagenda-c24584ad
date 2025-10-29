@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar, Users, TrendingUp, Clock, DollarSign, Star, Download, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -6,38 +6,137 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { supabase } from '@/integrations/supabase/client';
+import { format, startOfMonth, endOfMonth, subMonths, startOfDay, endOfDay } from 'date-fns';
 
 export default function Dashboard() {
   const [periodo, setPeriodo] = useState('30dias');
-  
-  // Dados mockados para demonstração
-  const stats = [
+  const [stats, setStats] = useState({
+    agendamentosHoje: 0,
+    clientesAtivos: 0,
+    taxaOcupacao: 0,
+    receitaMensal: 0,
+  });
+  const [agendamentosRecentes, setAgendamentosRecentes] = useState<any[]>([]);
+  const [servicosMaisRequisitados, setServicosMaisRequisitados] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    carregarDadosDashboard();
+  }, [periodo]);
+
+  const carregarDadosDashboard = async () => {
+    try {
+      setLoading(true);
+      const hoje = new Date();
+      const inicioHoje = startOfDay(hoje);
+      const fimHoje = endOfDay(hoje);
+
+      // Agendamentos de hoje
+      const { data: agendamentosHoje } = await supabase
+        .from('agendamentos')
+        .select('*')
+        .gte('data_hora', inicioHoje.toISOString())
+        .lte('data_hora', fimHoje.toISOString());
+
+      // Clientes ativos (total)
+      const { count: totalClientes } = await supabase
+        .from('clientes')
+        .select('*', { count: 'exact', head: true });
+
+      // Agendamentos do mês para calcular receita
+      const inicioMes = startOfMonth(hoje);
+      const fimMes = endOfMonth(hoje);
+      
+      const { data: agendamentosMes } = await supabase
+        .from('agendamentos')
+        .select(`
+          *,
+          servico:servicos(valor)
+        `)
+        .gte('data_hora', inicioMes.toISOString())
+        .lte('data_hora', fimMes.toISOString())
+        .in('status', ['confirmado', 'concluido']);
+
+      const receitaMensal = agendamentosMes?.reduce((acc, ag) => acc + (ag.servico?.valor || 0), 0) || 0;
+
+      // Próximos agendamentos de hoje
+      const { data: proximosAgendamentos } = await supabase
+        .from('agendamentos')
+        .select(`
+          *,
+          cliente:clientes(nome),
+          servico:servicos(nome),
+          profissional:profissionais(nome)
+        `)
+        .gte('data_hora', inicioHoje.toISOString())
+        .lte('data_hora', fimHoje.toISOString())
+        .order('data_hora')
+        .limit(5);
+
+      // Serviços mais requisitados
+      const { data: servicosData } = await supabase
+        .from('agendamentos')
+        .select(`
+          servico_id,
+          servico:servicos(nome)
+        `)
+        .gte('data_hora', inicioMes.toISOString());
+
+      const servicosCount = servicosData?.reduce((acc: any, item) => {
+        const servicoNome = item.servico?.nome || 'Desconhecido';
+        acc[servicoNome] = (acc[servicoNome] || 0) + 1;
+        return acc;
+      }, {});
+
+      const topServicos = Object.entries(servicosCount || {})
+        .sort(([, a]: any, [, b]: any) => b - a)
+        .slice(0, 5)
+        .map(([nome, count]) => ({ servico: nome, count }));
+
+      setStats({
+        agendamentosHoje: agendamentosHoje?.length || 0,
+        clientesAtivos: totalClientes || 0,
+        taxaOcupacao: agendamentosHoje?.length ? Math.min(100, (agendamentosHoje.length / 20) * 100) : 0,
+        receitaMensal,
+      });
+
+      setAgendamentosRecentes(proximosAgendamentos || []);
+      setServicosMaisRequisitados(topServicos);
+    } catch (error) {
+      console.error('Erro ao carregar dashboard:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const statsCards = [
     {
       title: 'Agendamentos Hoje',
-      value: '12',
+      value: stats.agendamentosHoje.toString(),
       icon: Calendar,
-      description: '+3 desde ontem',
+      description: 'Agendamentos confirmados',
       color: 'text-primary',
     },
     {
       title: 'Clientes Ativos',
-      value: '248',
+      value: stats.clientesAtivos.toString(),
       icon: Users,
-      description: '+18 este mês',
+      description: 'Total de clientes',
       color: 'text-success',
     },
     {
       title: 'Taxa de Ocupação',
-      value: '87%',
+      value: `${Math.round(stats.taxaOcupacao)}%`,
       icon: TrendingUp,
-      description: '+5% vs semana passada',
+      description: 'Ocupação de hoje',
       color: 'text-warning',
     },
     {
       title: 'Receita Mensal',
-      value: 'R$ 15.420',
+      value: `R$ ${stats.receitaMensal.toFixed(2)}`,
       icon: DollarSign,
-      description: '+12% vs mês anterior',
+      description: 'Receita do mês',
       color: 'text-accent',
     },
   ];
@@ -92,18 +191,8 @@ export default function Dashboard() {
     doc.text('Resumo', 14, 40);
     autoTable(doc, {
       startY: 45,
-      head: [['Métrica', 'Valor', 'Variação']],
-      body: stats.map(stat => [stat.title, stat.value, stat.description]),
-    });
-
-    // Receita Mensal
-    doc.addPage();
-    doc.setFontSize(14);
-    doc.text('Receita Mensal', 14, 20);
-    autoTable(doc, {
-      startY: 25,
-      head: [['Mês', 'Receita', 'Agendamentos']],
-      body: receitaMensal.map(item => [item.mes, `R$ ${item.receita}`, item.agendamentos]),
+      head: [['Métrica', 'Valor', 'Descrição']],
+      body: statsCards.map(stat => [stat.title, stat.value, stat.description]),
     });
 
     doc.save(`dashboard-${new Date().toISOString().split('T')[0]}.pdf`);
@@ -140,7 +229,7 @@ export default function Dashboard() {
 
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => {
+        {statsCards.map((stat) => {
           const Icon = stat.icon;
           return (
             <Card key={stat.title} className="hover:shadow-lg transition-shadow">
@@ -317,29 +406,35 @@ export default function Dashboard() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {recentAppointments.map((appointment) => (
-              <div
-                key={appointment.id}
-                className="flex items-center justify-between p-4 rounded-lg border border-border hover:bg-muted transition-colors"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="flex flex-col items-center justify-center w-16 h-16 rounded-lg bg-gradient-primary text-white">
-                    <span className="text-xs font-medium">Hoje</span>
-                    <span className="text-sm font-bold">{appointment.horario}</span>
+          {loading ? (
+            <p className="text-center text-muted-foreground py-8">Carregando...</p>
+          ) : agendamentosRecentes.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">Nenhum agendamento para hoje</p>
+          ) : (
+            <div className="space-y-3">
+              {agendamentosRecentes.map((appointment) => (
+                <div
+                  key={appointment.id}
+                  className="flex items-center justify-between p-4 rounded-lg border border-border hover:bg-muted transition-colors"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="flex flex-col items-center justify-center w-16 h-16 rounded-lg bg-gradient-primary text-white">
+                      <span className="text-xs font-medium">Hoje</span>
+                      <span className="text-sm font-bold">{format(new Date(appointment.data_hora), 'HH:mm')}</span>
+                    </div>
+                    <div>
+                      <p className="font-semibold">{appointment.cliente?.nome}</p>
+                      <p className="text-sm text-muted-foreground">{appointment.servico?.nome}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-semibold">{appointment.cliente}</p>
-                    <p className="text-sm text-muted-foreground">{appointment.servico}</p>
+                  <div className="text-right">
+                    <p className="text-sm font-medium">{appointment.profissional?.nome}</p>
+                    <p className="text-xs text-muted-foreground">Profissional</p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-medium">{appointment.profissional}</p>
-                  <p className="text-xs text-muted-foreground">Profissional</p>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

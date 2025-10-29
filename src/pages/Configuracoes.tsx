@@ -9,24 +9,55 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Settings, Palette, Bot, MessageSquare, Globe, Users } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 export default function Configuracoes() {
+  const { toast } = useToast();
   const [clientes, setClientes] = useState<any[]>([]);
   const [clientesSelecionados, setClientesSelecionados] = useState<string[]>([]);
   const [listaManual, setListaManual] = useState('');
+  const [config, setConfig] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    carregarClientes();
+    carregarDados();
   }, []);
 
-  const carregarClientes = async () => {
-    const { data } = await supabase
-      .from('clientes')
-      .select('id, nome, whatsapp')
-      .order('nome');
-    
-    if (data) setClientes(data);
+  const carregarDados = async () => {
+    try {
+      const [{ data: clientesData }, { data: configData }] = await Promise.all([
+        supabase.from('clientes').select('id, nome, whatsapp').order('nome'),
+        supabase.from('configuracoes_negocio').select('*').single()
+      ]);
+      
+      if (clientesData) setClientes(clientesData);
+      if (configData) setConfig(configData);
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const salvarConfiguracoes = async (campo: string, valor: any) => {
+    try {
+      const { error } = await supabase
+        .from('configuracoes_negocio')
+        .update({ [campo]: valor, updated_at: new Date().toISOString() })
+        .eq('id', config?.id);
+
+      if (error) throw error;
+
+      toast({ title: 'Configurações salvas com sucesso!' });
+      carregarDados();
+    } catch (error: any) {
+      toast({
+        title: 'Erro ao salvar',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
   };
 
   const toggleCliente = (whatsapp: string) => {
@@ -310,7 +341,54 @@ export default function Configuracoes() {
                 </div>
               </div>
 
-              <Button>Salvar Configurações WhatsApp</Button>
+              <div className="space-y-4 p-4 border border-border rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Mensagem de Resgate de Clientes</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Enviar mensagem automática para clientes inativos
+                    </p>
+                  </div>
+                  <Switch 
+                    checked={config?.whatsapp_resgate_ativa || false}
+                    onCheckedChange={(checked) => salvarConfiguracoes('whatsapp_resgate_ativa', checked)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="dias-inatividade">Dias de inatividade</Label>
+                  <Input
+                    id="dias-inatividade"
+                    type="number"
+                    min="1"
+                    value={config?.whatsapp_resgate_dias || 15}
+                    onChange={(e) => salvarConfiguracoes('whatsapp_resgate_dias', parseInt(e.target.value))}
+                    placeholder="15"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Enviar mensagem após X dias sem atendimento
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="mensagem-resgate">Mensagem</Label>
+                  <Textarea
+                    id="mensagem-resgate"
+                    value={config?.whatsapp_resgate_mensagem || ''}
+                    onChange={(e) => setConfig({ ...config, whatsapp_resgate_mensagem: e.target.value })}
+                    onBlur={(e) => salvarConfiguracoes('whatsapp_resgate_mensagem', e.target.value)}
+                    rows={3}
+                    placeholder="Olá {nome}! Sentimos sua falta! Faz {dias} dias do seu último atendimento..."
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Use {'{nome}'} para o nome do cliente e {'{dias}'} para quantidade de dias
+                  </p>
+                </div>
+              </div>
+
+              <Button onClick={() => toast({ title: 'Configurações WhatsApp salvas!' })}>
+                Salvar Configurações WhatsApp
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
