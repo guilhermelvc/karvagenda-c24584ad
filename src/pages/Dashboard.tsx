@@ -20,6 +20,9 @@ export default function Dashboard() {
   const [agendamentosRecentes, setAgendamentosRecentes] = useState<any[]>([]);
   const [servicosMaisRequisitados, setServicosMaisRequisitados] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [graficoReceita, setGraficoReceita] = useState<any[]>([]);
+  const [graficoCategoria, setGraficoCategoria] = useState<any[]>([]);
+  const [graficoCancelamento, setGraficoCancelamento] = useState<any[]>([]);
 
   useEffect(() => {
     carregarDadosDashboard();
@@ -58,7 +61,7 @@ export default function Dashboard() {
         .lte('data_hora', fimMes.toISOString())
         .in('status', ['confirmado', 'concluido']);
 
-      const receitaMensal = agendamentosMes?.reduce((acc, ag) => acc + (ag.servico?.valor || 0), 0) || 0;
+      const receitaMensal = agendamentosMes?.reduce((acc, ag) => acc + Number(ag.servico?.valor ?? 0), 0) || 0;
 
       // Próximos agendamentos de hoje
       const { data: proximosAgendamentos } = await supabase
@@ -79,7 +82,9 @@ export default function Dashboard() {
         .from('agendamentos')
         .select(`
           servico_id,
-          servico:servicos(nome)
+          servico:servicos(nome, categoria, valor),
+          status,
+          data_hora
         `)
         .gte('data_hora', inicioMes.toISOString());
 
@@ -93,6 +98,56 @@ export default function Dashboard() {
         .sort(([, a]: any, [, b]: any) => b - a)
         .slice(0, 5)
         .map(([nome, count]) => ({ servico: nome, count }));
+
+      // Gráficos dinâmicos (últimos 6 meses)
+      const inicioPeriodo = startOfMonth(subMonths(hoje, 5));
+      const { data: agsPeriodo } = await supabase
+        .from('agendamentos')
+        .select(`
+          *,
+          servico:servicos(valor, categoria)
+        `)
+        .gte('data_hora', inicioPeriodo.toISOString())
+        .lte('data_hora', fimMes.toISOString());
+
+      const meses = Array.from({ length: 6 }, (_, i) => {
+        const d = subMonths(hoje, 5 - i);
+        return { ini: startOfMonth(d), fim: endOfMonth(d) };
+      });
+
+      const grafReceita = meses.map(({ ini, fim }) => {
+        const chave = format(ini, 'LLL');
+        const doMes = (agsPeriodo || []).filter(a => new Date(a.data_hora) >= ini && new Date(a.data_hora) <= fim);
+        const concluidos = doMes.filter(a => ['confirmado', 'concluido'].includes(a.status || ''));
+        const receita = concluidos.reduce((acc, a) => acc + Number(a.servico?.valor ?? 0), 0);
+        return { mes: chave, receita, agendamentos: concluidos.length };
+      });
+
+      const grafCancel = meses.map(({ ini, fim }) => {
+        const chave = format(ini, 'LLL');
+        const doMes = (agsPeriodo || []).filter(a => new Date(a.data_hora) >= ini && new Date(a.data_hora) <= fim);
+        const total = doMes.length || 1;
+        const cancelados = doMes.filter(a => a.status === 'cancelado').length;
+        const taxa = Number(((cancelados / total) * 100).toFixed(1));
+        return { mes: chave, taxa };
+      });
+
+      const contPorCategoria = (agendamentosMes || []).reduce((acc: any, a: any) => {
+        const cat = a.servico?.categoria || 'Outros';
+        acc[cat] = (acc[cat] || 0) + 1;
+        return acc;
+      }, {});
+      const totalCat = Object.values(contPorCategoria).reduce((acc: number, v: any) => acc + (v as number), 0) || 1;
+      const paleta = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444', '#6366F1'];
+      const grafCat = Object.entries(contPorCategoria).map(([nome, qtd], idx) => ({
+        nome,
+        valor: Math.round((Number(qtd) / Number(totalCat)) * 100),
+        cor: paleta[idx % paleta.length],
+      }));
+
+      setGraficoReceita(grafReceita);
+      setGraficoCancelamento(grafCancel);
+      setGraficoCategoria(grafCat);
 
       setStats({
         agendamentosHoje: agendamentosHoje?.length || 0,
@@ -142,22 +197,9 @@ export default function Dashboard() {
   ];
 
   // Dados para gráficos
-  const receitaMensal = [
-    { mes: 'Jul', receita: 12500, agendamentos: 85 },
-    { mes: 'Ago', receita: 13200, agendamentos: 92 },
-    { mes: 'Set', receita: 14100, agendamentos: 98 },
-    { mes: 'Out', receita: 13800, agendamentos: 95 },
-    { mes: 'Nov', receita: 15000, agendamentos: 105 },
-    { mes: 'Dez', receita: 15420, agendamentos: 112 },
-  ];
+  // dados de gráficos dinâmicos vêm de estado: graficoReceita
 
-  const servicosPorCategoria = [
-    { nome: 'Cabelo', valor: 35, cor: '#3B82F6' },
-    { nome: 'Estética', valor: 28, cor: '#10B981' },
-    { nome: 'Barba', valor: 18, cor: '#F59E0B' },
-    { nome: 'Manicure', valor: 12, cor: '#8B5CF6' },
-    { nome: 'Outros', valor: 7, cor: '#EF4444' },
-  ];
+  // distribuição por categoria: graficoCategoria
 
   const taxaCancelamento = [
     { mes: 'Jul', taxa: 5.2 },
@@ -261,7 +303,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={receitaMensal}>
+              <LineChart data={graficoReceita}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="mes" />
                 <YAxis yAxisId="left" />
@@ -286,7 +328,7 @@ export default function Dashboard() {
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
-                  data={servicosPorCategoria}
+                  data={graficoCategoria}
                   cx="50%"
                   cy="50%"
                   labelLine={false}
@@ -295,7 +337,7 @@ export default function Dashboard() {
                   fill="#8884d8"
                   dataKey="valor"
                 >
-                  {servicosPorCategoria.map((entry, index) => (
+                  {graficoCategoria.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.cor} />
                   ))}
                 </Pie>
@@ -317,7 +359,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={taxaCancelamento}>
+              <BarChart data={graficoCancelamento}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="mes" />
                 <YAxis />
