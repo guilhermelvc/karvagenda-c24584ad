@@ -9,6 +9,7 @@ import { Calendar } from '@/components/ui/calendar';
 import AgendamentoModal from '@/components/modals/AgendamentoModal';
 import { Agendamento } from '@/types';
 import { supabase } from '@/lib/supabase';
+import { CORES_SERVICOS } from '@/config/constants';
 
 export default function Agenda() {
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { locale: ptBR }));
@@ -16,15 +17,6 @@ export default function Agenda() {
   const [modalOpen, setModalOpen] = useState(false);
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [selectedAgendamento, setSelectedAgendamento] = useState<Agendamento | undefined>();
-
-  const coresServicos: { [key: string]: string } = {
-    'Corte de Cabelo': '#3B82F6',
-    'Barba': '#10B981',
-    'Manicure': '#F59E0B',
-    'Massagem': '#8B5CF6',
-    'Design Sobrancelha': '#EF4444',
-    default: '#6B7280'
-  };
 
   useEffect(() => {
     carregarAgendamentos();
@@ -59,14 +51,17 @@ export default function Agenda() {
     }
   };
 
-  // Mock appointments
-  const appointments = [
-    { dia: 1, hora: 2, cliente: 'Maria Silva', servico: 'Corte de Cabelo' },
-    { dia: 1, hora: 4, cliente: 'Pedro Santos', servico: 'Barba' },
-    { dia: 2, hora: 3, cliente: 'Ana Costa', servico: 'Manicure' },
-    { dia: 3, hora: 5, cliente: 'Lucas Oliveira', servico: 'Massagem' },
-    { dia: 4, hora: 2, cliente: 'Carla Lima', servico: 'Design Sobrancelha' },
-  ];
+  // Função para obter agendamentos para uma célula específica
+  const getAppointmentForCell = (dayIndex: number, timeIndex: number) => {
+    const targetDay = weekDays[dayIndex];
+    const targetHour = 8 + timeIndex;
+    
+    return agendamentos.find(ag => {
+      const agDate = new Date(ag.data_hora);
+      return format(agDate, 'yyyy-MM-dd') === format(targetDay, 'yyyy-MM-dd') &&
+             agDate.getHours() === targetHour;
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -165,22 +160,26 @@ export default function Agenda() {
 
                 {/* Day Cells */}
                 {weekDays.map((day, dayIndex) => {
-                  const appointment = appointments.find(
-                    apt => apt.dia === dayIndex && apt.hora === timeIndex
-                  );
+                  const appointment = getAppointmentForCell(dayIndex, timeIndex);
 
                   return (
                     <div
                       key={`${day.toISOString()}-${time}`}
                       className="min-h-[60px] border border-border rounded-lg p-1 hover:bg-muted transition-colors cursor-pointer relative"
+                      onClick={() => {
+                        if (appointment) {
+                          setSelectedAgendamento(appointment);
+                          setModalOpen(true);
+                        }
+                      }}
                     >
                       {appointment && (
                         <div 
                           className="absolute inset-1 rounded p-2 text-white text-xs"
-                          style={{ backgroundColor: coresServicos[appointment.servico] || coresServicos.default }}
+                          style={{ backgroundColor: CORES_SERVICOS[appointment.servico?.nome || 'default'] || CORES_SERVICOS.default }}
                         >
-                          <div className="font-semibold truncate">{appointment.cliente}</div>
-                          <div className="opacity-90 truncate">{appointment.servico}</div>
+                          <div className="font-semibold truncate">{appointment.cliente?.nome}</div>
+                          <div className="opacity-90 truncate">{appointment.servico?.nome}</div>
                         </div>
                       )}
                     </div>
@@ -208,21 +207,23 @@ export default function Agenda() {
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {timeSlots.map((time, timeIndex) => {
-                    const appointment = appointments.find(
-                      apt => apt.dia === dayIndex && apt.hora === timeIndex
-                    );
+                    const appointment = getAppointmentForCell(dayIndex, timeIndex);
                     
                     return appointment ? (
                       <div 
                         key={time}
-                        className="p-3 rounded-lg text-white"
-                        style={{ backgroundColor: coresServicos[appointment.servico] || coresServicos.default }}
+                        className="p-3 rounded-lg text-white cursor-pointer"
+                        style={{ backgroundColor: CORES_SERVICOS[appointment.servico?.nome || 'default'] || CORES_SERVICOS.default }}
+                        onClick={() => {
+                          setSelectedAgendamento(appointment);
+                          setModalOpen(true);
+                        }}
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className="font-semibold">{time}</span>
                         </div>
-                        <div className="font-medium">{appointment.cliente}</div>
-                        <div className="text-sm opacity-90">{appointment.servico}</div>
+                        <div className="font-medium">{appointment.cliente?.nome}</div>
+                        <div className="text-sm opacity-90">{appointment.servico?.nome}</div>
                       </div>
                     ) : null;
                   })}
@@ -237,7 +238,7 @@ export default function Agenda() {
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-wrap items-center gap-4">
-            {Object.entries(coresServicos).filter(([key]) => key !== 'default').map(([servico, cor]) => (
+            {Object.entries(CORES_SERVICOS).filter(([key]) => key !== 'default').map(([servico, cor]) => (
               <div key={servico} className="flex items-center gap-2">
                 <div className="w-4 h-4 rounded" style={{ backgroundColor: cor }} />
                 <span className="text-sm">{servico}</span>

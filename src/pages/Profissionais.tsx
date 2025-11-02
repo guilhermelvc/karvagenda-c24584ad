@@ -15,9 +15,15 @@ export default function Profissionais() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [selectedProfissional, setSelectedProfissional] = useState<Profissional | undefined>();
   const [deleteItem, setDeleteItem] = useState<{ id: string; name: string } | null>(null);
+  const [stats, setStats] = useState({
+    totalProfissionais: 0,
+    atendimentosHoje: 0,
+    novosEsteMes: 0,
+  });
 
   useEffect(() => {
     carregarProfissionais();
+    carregarEstatisticas();
   }, []);
 
   const carregarProfissionais = async () => {
@@ -27,6 +33,38 @@ export default function Profissionais() {
       .order('nome');
     
     if (data) setProfissionais(data);
+  };
+
+  const carregarEstatisticas = async () => {
+    const hoje = new Date();
+    const inicioHoje = new Date(hoje.setHours(0, 0, 0, 0));
+    const fimHoje = new Date(hoje.setHours(23, 59, 59, 999));
+    const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+
+    // Total de profissionais
+    const { count: totalProfissionais } = await supabase
+      .from('profissionais')
+      .select('*', { count: 'exact', head: true });
+
+    // Atendimentos hoje
+    const { count: atendimentosHoje } = await supabase
+      .from('agendamentos')
+      .select('*', { count: 'exact', head: true })
+      .gte('data_hora', inicioHoje.toISOString())
+      .lte('data_hora', fimHoje.toISOString())
+      .in('status', ['confirmado', 'concluido']);
+
+    // Novos profissionais este mês
+    const { count: novosEsteMes } = await supabase
+      .from('profissionais')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', inicioMes.toISOString());
+
+    setStats({
+      totalProfissionais: totalProfissionais || 0,
+      atendimentosHoje: atendimentosHoje || 0,
+      novosEsteMes: novosEsteMes || 0,
+    });
   };
 
   const handleEdit = (profissional: Profissional) => {
@@ -43,40 +81,6 @@ export default function Profissionais() {
     setSelectedProfissional(undefined);
     setModalOpen(true);
   };
-
-  // Mock data para cards de profissionais se necessário
-  const mockProfissionais = [
-    {
-      id: 1,
-      nome: 'João Silva',
-      especialidade: 'Cabeleireiro',
-      avatar: '',
-      horarios: 'Seg-Sex: 9h-18h',
-      avaliacao: 4.8,
-      totalAtendimentos: 342,
-      status: 'ativo'
-    },
-    {
-      id: 2,
-      nome: 'Maria Santos',
-      especialidade: 'Manicure',
-      avatar: '',
-      horarios: 'Ter-Sáb: 10h-19h',
-      avaliacao: 4.9,
-      totalAtendimentos: 456,
-      status: 'ativo'
-    },
-    {
-      id: 3,
-      nome: 'Carlos Oliveira',
-      especialidade: 'Barbeiro',
-      avatar: '',
-      horarios: 'Seg-Sex: 10h-20h',
-      avaliacao: 4.7,
-      totalAtendimentos: 289,
-      status: 'ausente'
-    },
-  ];
 
   return (
     <div className="space-y-6">
@@ -100,17 +104,17 @@ export default function Profissionais() {
             <CardTitle className="text-sm font-medium">Total de Profissionais</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">12</div>
-            <p className="text-xs text-muted-foreground">+2 este mês</p>
+            <div className="text-2xl font-bold">{stats.totalProfissionais}</div>
+            <p className="text-xs text-muted-foreground">+{stats.novosEsteMes} este mês</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Em Atendimento</CardTitle>
+            <CardTitle className="text-sm font-medium">Profissionais Ativos</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">8</div>
-            <p className="text-xs text-muted-foreground">67% da equipe</p>
+            <div className="text-2xl font-bold">{profissionais.length}</div>
+            <p className="text-xs text-muted-foreground">Cadastrados no sistema</p>
           </CardContent>
         </Card>
         <Card>
@@ -118,8 +122,8 @@ export default function Profissionais() {
             <CardTitle className="text-sm font-medium">Atendimentos Hoje</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">48</div>
-            <p className="text-xs text-muted-foreground">+12% vs ontem</p>
+            <div className="text-2xl font-bold">{stats.atendimentosHoje}</div>
+            <p className="text-xs text-muted-foreground">Agendamentos confirmados</p>
           </CardContent>
         </Card>
       </div>

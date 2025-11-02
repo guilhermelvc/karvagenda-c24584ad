@@ -17,9 +17,15 @@ export default function Clientes() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [selectedCliente, setSelectedCliente] = useState<Cliente | undefined>();
   const [deleteItem, setDeleteItem] = useState<{ id: string; name: string } | null>(null);
+  const [stats, setStats] = useState({
+    totalClientes: 0,
+    novosEsteMes: 0,
+    crescimentoPercentual: 0,
+  });
 
   useEffect(() => {
     carregarClientes();
+    carregarEstatisticas();
   }, []);
 
   const carregarClientes = async () => {
@@ -29,6 +35,41 @@ export default function Clientes() {
       .order('nome');
     
     if (data) setClientes(data);
+  };
+
+  const carregarEstatisticas = async () => {
+    const hoje = new Date();
+    const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    const inicioMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+    const fimMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+
+    // Total de clientes
+    const { count: totalClientes } = await supabase
+      .from('clientes')
+      .select('*', { count: 'exact', head: true });
+
+    // Novos clientes este mês
+    const { count: novosEsteMes } = await supabase
+      .from('clientes')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', inicioMes.toISOString());
+
+    // Novos clientes mês anterior
+    const { count: novosMesAnterior } = await supabase
+      .from('clientes')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', inicioMesAnterior.toISOString())
+      .lte('created_at', fimMesAnterior.toISOString());
+
+    const crescimentoPercentual = novosMesAnterior && novosMesAnterior > 0
+      ? Math.round(((novosEsteMes || 0) - novosMesAnterior) / novosMesAnterior * 100)
+      : 0;
+
+    setStats({
+      totalClientes: totalClientes || 0,
+      novosEsteMes: novosEsteMes || 0,
+      crescimentoPercentual,
+    });
   };
 
   const handleEdit = (cliente: Cliente) => {
@@ -45,40 +86,6 @@ export default function Clientes() {
     setSelectedCliente(undefined);
     setModalOpen(true);
   };
-
-  // Mock data para stats
-  const mockClientes = [
-    {
-      id: 1,
-      nome: 'Maria Silva',
-      email: 'maria@email.com',
-      telefone: '(11) 98765-4321',
-      avatar: '',
-      totalAgendamentos: 15,
-      ultimoAgendamento: '2025-01-15',
-      status: 'ativo'
-    },
-    {
-      id: 2,
-      nome: 'Pedro Santos',
-      email: 'pedro@email.com',
-      telefone: '(11) 91234-5678',
-      avatar: '',
-      totalAgendamentos: 8,
-      ultimoAgendamento: '2025-01-18',
-      status: 'ativo'
-    },
-    {
-      id: 3,
-      nome: 'Ana Costa',
-      email: 'ana@email.com',
-      telefone: '(11) 92345-6789',
-      avatar: '',
-      totalAgendamentos: 22,
-      ultimoAgendamento: '2025-01-20',
-      status: 'vip'
-    },
-  ];
 
   const filteredClientes = clientes.filter(cliente =>
     cliente.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -122,17 +129,17 @@ export default function Clientes() {
             <CardTitle className="text-sm font-medium">Total de Clientes</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">248</div>
-            <p className="text-xs text-muted-foreground">+18 este mês</p>
+            <div className="text-2xl font-bold">{stats.totalClientes}</div>
+            <p className="text-xs text-muted-foreground">+{stats.novosEsteMes} este mês</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Clientes VIP</CardTitle>
+            <CardTitle className="text-sm font-medium">Clientes Ativos</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">42</div>
-            <p className="text-xs text-muted-foreground">+5 este mês</p>
+            <div className="text-2xl font-bold">{clientes.length}</div>
+            <p className="text-xs text-muted-foreground">Cadastrados no sistema</p>
           </CardContent>
         </Card>
         <Card>
@@ -140,8 +147,10 @@ export default function Clientes() {
             <CardTitle className="text-sm font-medium">Novos este Mês</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">18</div>
-            <p className="text-xs text-muted-foreground">+25% vs mês anterior</p>
+            <div className="text-2xl font-bold">{stats.novosEsteMes}</div>
+            <p className="text-xs text-muted-foreground">
+              {stats.crescimentoPercentual > 0 ? '+' : ''}{stats.crescimentoPercentual}% vs mês anterior
+            </p>
           </CardContent>
         </Card>
       </div>
