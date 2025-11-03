@@ -90,9 +90,13 @@ export default function ProfissionalModal({ open, onOpenChange, profissional, on
         if (error) throw error;
         toast({ title: 'Profissional atualizado com sucesso!' });
       } else {
+        // Garantir user_id para RLS
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Usuário não autenticado');
+
         const { error } = await supabase
           .from('profissionais')
-          .insert([{ ...profissionalData, created_at: new Date().toISOString() }]);
+          .insert([{ ...profissionalData, created_at: new Date().toISOString(), user_id: user.id }]);
 
         if (error) throw error;
         toast({ title: 'Profissional cadastrado com sucesso!' });

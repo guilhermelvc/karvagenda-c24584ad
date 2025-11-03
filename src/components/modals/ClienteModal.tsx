@@ -72,9 +72,13 @@ export default function ClienteModal({ open, onOpenChange, cliente, onSuccess }:
         if (error) throw error;
         toast({ title: 'Cliente atualizado com sucesso!' });
       } else {
+        // Garantir user_id para RLS
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Usuário não autenticado');
+
         const { error } = await supabase
           .from('clientes')
-          .insert([{ ...clienteData, created_at: new Date().toISOString() }]);
+          .insert([{ ...clienteData, created_at: new Date().toISOString(), user_id: user.id }]);
 
         if (error) throw error;
         toast({ title: 'Cliente cadastrado com sucesso!' });

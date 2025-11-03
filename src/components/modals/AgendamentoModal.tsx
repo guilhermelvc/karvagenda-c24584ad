@@ -195,11 +195,17 @@ export default function AgendamentoModal({ open, onOpenChange, agendamento, onSu
       const [horas, minutos] = formData.horario.split(':');
       dataHora.setHours(parseInt(horas), parseInt(minutos));
 
+      // Calcula data_fim com base na duração do serviço
+      const servicoSelecionado = servicos.find((s) => s.id === formData.servico_id);
+      const duracaoMin = servicoSelecionado?.duracao_minutos || 60;
+      const dataFim = new Date(dataHora.getTime() + duracaoMin * 60000);
+
       const agendamentoData = {
         cliente_id: formData.cliente_id,
         profissional_id: formData.profissional_id,
         servico_id: formData.servico_id,
         data_hora: dataHora.toISOString(),
+        data_fim: dataFim.toISOString(),
         status: formData.status,
         observacoes: formData.observacoes,
         updated_at: new Date().toISOString(),
@@ -214,9 +220,13 @@ export default function AgendamentoModal({ open, onOpenChange, agendamento, onSu
         if (error) throw error;
         toast({ title: 'Agendamento atualizado com sucesso!' });
       } else {
+        // Garantir user_id para RLS
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Usuário não autenticado');
+
         const { error } = await supabase
           .from('agendamentos')
-          .insert([{ ...agendamentoData, created_at: new Date().toISOString() }]);
+          .insert([{ ...agendamentoData, created_at: new Date().toISOString(), user_id: user.id }]);
 
         if (error) throw error;
         toast({ title: 'Agendamento criado com sucesso!' });

@@ -23,7 +23,7 @@ export default function Dashboard() {
   const [graficoReceita, setGraficoReceita] = useState<any[]>([]);
   const [graficoCategoria, setGraficoCategoria] = useState<any[]>([]);
   const [graficoCancelamento, setGraficoCancelamento] = useState<any[]>([]);
-
+  const [horariosPico, setHorariosPico] = useState<{ horario: string; percentual: number }[]>([]);
   useEffect(() => {
     carregarDadosDashboard();
   }, [periodo]);
@@ -149,6 +149,20 @@ export default function Dashboard() {
       setGraficoCancelamento(grafCancel);
       setGraficoCategoria(grafCat);
 
+      // Horários de pico (top 3 horas do dia)
+      const contHoras: Record<string, number> = {};
+      (agendamentosHoje || []).forEach((a: any) => {
+        const h = new Date(a.data_hora).getHours();
+        const label = `${String(h).padStart(2, '0')}:00 - ${String(h + 1).padStart(2, '0')}:00`;
+        contHoras[label] = (contHoras[label] || 0) + 1;
+      });
+      const maxHora = Math.max(1, ...Object.values(contHoras));
+      const topHoras = Object.entries(contHoras)
+        .sort(([, a], [, b]) => Number(b) - Number(a))
+        .slice(0, 3)
+        .map(([horario, count]) => ({ horario, percentual: Math.round((Number(count) / maxHora) * 100) }));
+      setHorariosPico(topHoras);
+
       setStats({
         agendamentosHoje: agendamentosHoje?.length || 0,
         clientesAtivos: totalClientes || 0,
@@ -201,21 +215,6 @@ export default function Dashboard() {
 
   // distribuição por categoria: graficoCategoria
 
-  const taxaCancelamento = [
-    { mes: 'Jul', taxa: 5.2 },
-    { mes: 'Ago', taxa: 4.8 },
-    { mes: 'Set', taxa: 3.9 },
-    { mes: 'Out', taxa: 4.2 },
-    { mes: 'Nov', taxa: 3.5 },
-    { mes: 'Dez', taxa: 3.1 },
-  ];
-
-  const recentAppointments = [
-    { id: 1, cliente: 'Maria Silva', servico: 'Corte de Cabelo', horario: '09:00', profissional: 'João' },
-    { id: 2, cliente: 'Pedro Santos', servico: 'Barba', horario: '10:30', profissional: 'Carlos' },
-    { id: 3, cliente: 'Ana Costa', servico: 'Manicure', horario: '14:00', profissional: 'Juliana' },
-    { id: 4, cliente: 'Lucas Oliveira', servico: 'Massagem', horario: '15:30', profissional: 'Fernanda' },
-  ];
 
   const exportarPDF = () => {
     const doc = new jsPDF();
@@ -380,11 +379,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {[
-                { horario: '09:00 - 12:00', percentual: 85 },
-                { horario: '14:00 - 17:00', percentual: 92 },
-                { horario: '17:00 - 20:00', percentual: 78 },
-              ].map((item) => (
+              {(horariosPico.length ? horariosPico : []).map((item) => (
                 <div key={item.horario} className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span className="flex items-center gap-2">
@@ -401,6 +396,9 @@ export default function Dashboard() {
                   </div>
                 </div>
               ))}
+              {horariosPico.length === 0 && (
+                <p className="text-sm text-muted-foreground">Sem dados para hoje</p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -416,25 +414,19 @@ export default function Dashboard() {
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
-            {[
-              { servico: 'Corte de Cabelo', count: 156, rating: 4.8 },
-              { servico: 'Manicure', count: 142, rating: 4.9 },
-              { servico: 'Massagem', count: 98, rating: 4.7 },
-              { servico: 'Design Sobrancelha', count: 87, rating: 4.8 },
-              { servico: 'Barba', count: 76, rating: 4.6 },
-            ].map((item, index) => (
-              <div key={item.servico} className="flex flex-col items-center justify-between p-4 rounded-lg bg-muted">
-                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-gradient-primary text-white font-bold mb-2">
-                  {index + 1}
+            {servicosMaisRequisitados.length === 0 ? (
+              <p className="text-sm text-muted-foreground col-span-full">Sem dados no período</p>
+            ) : (
+              servicosMaisRequisitados.map((item, index) => (
+                <div key={item.servico} className="flex flex-col items-center justify-between p-4 rounded-lg bg-muted">
+                  <div className="flex items-center justify-center w-12 h-12 rounded-full bg-gradient-primary text-white font-bold mb-2">
+                    {index + 1}
+                  </div>
+                  <p className="font-medium text-center">{item.servico}</p>
+                  <p className="text-sm text-muted-foreground">{item.count} vezes</p>
                 </div>
-                <p className="font-medium text-center">{item.servico}</p>
-                <p className="text-sm text-muted-foreground">{item.count} vezes</p>
-                <div className="flex items-center gap-1 mt-1">
-                  <Star className="h-4 w-4 fill-warning text-warning" />
-                  <span className="font-medium">{item.rating}</span>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </CardContent>
       </Card>

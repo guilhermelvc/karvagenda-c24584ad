@@ -48,9 +48,13 @@ export default function ServicoModal({ open, onOpenChange, servico, onSuccess }:
         if (error) throw error;
         toast({ title: 'Serviço atualizado com sucesso!' });
       } else {
+        // Garantir user_id para RLS
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Usuário não autenticado');
+
         const { error } = await supabase
           .from('servicos')
-          .insert([{ ...servicoData, created_at: new Date().toISOString() }]);
+          .insert([{ ...servicoData, created_at: new Date().toISOString(), user_id: user.id }]);
 
         if (error) throw error;
         toast({ title: 'Serviço cadastrado com sucesso!' });
